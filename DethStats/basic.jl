@@ -7,6 +7,9 @@
 # Date: February 2019
 
 using Distributions
+using Plots
+import PyPlot
+using LsqFit
 
 # Function to determine pearson smaple coefficent and associated p value
 function pearson(xvec::Array{Float64,1},yvec::Array{Float64,1})
@@ -46,6 +49,32 @@ function pearson(xvec::Array{Float64,1},yvec::Array{Float64,1})
         P = 2*cdf(d,-t)
     end
     return(r,P)
+end
+
+# Make a function to do a linear least squares fit
+function least2(xdata::Array{Float64,1},ydata::Array{Float64,1})
+    # check two lists are the same length
+    if length(xdata) != length(ydata)
+        println("Error: Cannot find linear relation for data of different lengths")
+        error()
+    end
+    # need to include a step to remove NaNs from consideration
+    inds = [] # find indices to delete
+    for i = 1:length(xdata)
+        if isnan(xdata[i]) || isnan(ydata[i])
+            inds = vcat(inds,i)
+        end
+    end
+    xdata = deleteat!(xdata,inds)
+    ydata = deleteat!(ydata,inds)
+    # now define linear model
+    @. model(x,p) = p[1] + p[2]*x
+    # Need to remove NaN data
+    p0 = [0.0,1.0]
+    fit = curve_fit(model,xdata,ydata,p0)
+    yint = coef(fit)[1]
+    slope = coef(fit)[2]
+    return(slope,yint)
 end
 
 function main()
@@ -202,6 +231,30 @@ function main()
         write(out_file,line)
     end
     close(out_file)
+    # Now that the data has been output there are two graphs that seem worth plotting
+    pyplot(dpi=150)
+    xplotrange = 0.65:0.05:1.7
+    scatter([bd[grassrange]],[erg[grassrange]],legend=false,xlims=(0.6,1.8),ylims=(0.6,14.0))
+    plot!(xlabel="Bulk Density (g.cm^-3)",ylabel="Ergosterol (ug.g^-1)",xticks=0.6:0.2:1.8,yticks=0.0:2.0:14.0)
+    slope, yint =  least2(bd[grassrange],erg[grassrange])
+    plot!(xplotrange,yint.+slope.*xplotrange,color=1)
+    savefig("../Output/ErgosterolvsBulkDensity.png")
+    xplotrange = 125.0:25.0:375.0
+    scatter([alt[grassrange]],[bd[grassrange]],legend=false,xlims=(100.0,400.0),ylims=(0.6,1.8))
+    plot!(xlabel="Quadrat Altitude (m)",ylabel="Bulk Density (g.cm^-3)",xticks=100.0:50.0:400.0,yticks=0.6:0.2:1.8)
+    slope, yint =  least2(alt[grassrange],bd[grassrange])
+    plot!(xplotrange,yint.+slope.*xplotrange,color=1)
+    savefig("../Output/BulkDensityvsAltitude.png")
+    # Now to make the bar charts for grassland data
+    BD = bd[fgrassrange]
+    ERG = erg[fgrassrange]
+    labels = idents[fgrassrange]
+    tokens = Array{String,1}(undef,length(labels))
+    # Reduce these labels to two letter idetifiers
+    for i = 1:length(labels)
+        token = labels[i]
+        tokens[i] = token[1:2]
+    end
     return(nothing)
 end
 
