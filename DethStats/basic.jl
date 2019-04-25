@@ -77,6 +77,17 @@ function least2(xdata::Array{Float64,1},ydata::Array{Float64,1})
     return(slope,yint)
 end
 
+# make a function to calculate standrad deviations
+function standdev(data::Array{Float64,1},mean::Float64)
+    n = length(data)
+    a = 0
+    for i = 1:n
+        a += (data[i]-mean)^2
+    end
+    sd = sqrt(a/(n-1))
+    return(sd)
+end
+
 function main()
     # Check there is a file of productions to be read
     infile = "../Input/soildata.csv"
@@ -255,6 +266,45 @@ function main()
         token = labels[i]
         tokens[i] = token[1:2]
     end
+    # New data structures for each site
+    sites = unique(tokens) # slow but okay method of obtaining unqiue entries
+    bulk = zeros(length(sites))
+    ergo = zeros(length(sites))
+    erbulk = zeros(length(sites))
+    erergo = zeros(length(sites))
+    # now use for loop to find ranges for each site
+    ranges = zeros(Int64,length(sites),2)
+    count = 0
+    for i = 1:length(sites)
+        all = false
+        ranges[i,1] = count+1
+        token = tokens[count+1]
+        while all == false
+            count += 1
+            if count+1 > length(labels) || tokens[count+1] != token
+                all = true
+            end
+        end
+        ranges[i,2] = count
+    end
+    # Now use a loop to calculate means and standard deviations
+    for i = 1:length(sites)
+        # filter relevant data
+        filterg = filter(y->!isnan(y),ERG[ranges[i,1]:ranges[i,2]])
+        filtbd = filter(y->!isnan(y),BD[ranges[i,1]:ranges[i,2]])
+        # find means
+        ergo[i] = sum(filterg)/length(filterg)
+        bulk[i] = sum(filtbd)/length(filtbd)
+        # use my function to find standard deviations
+        erergo[i] = standdev(filterg,ergo[i])
+        erbulk[i] = standdev(filtbd,bulk[i])
+    end
+    # Now plot two bar charts
+    bar(sites,ergo,yerr=erergo,legend=false,ylabel="Ergosterol (ug.g^-1)",ylims=(0,18),yticks=0.0:2.0:18.0,markercolor=:black,markerstrokecolor=:black)
+    savefig("../Output/ErgosterolBar.png")
+    bar(sites,bulk,yerr=erbulk,legend=false,ylabel="Bulk Denisty (g.cm^-1)",ylims=(0,1.8),yticks=0.0:0.2:1.8,markercolor=:black,markerstrokecolor=:black)
+    savefig("../Output/BulkDenistyBar.png")
+    # Now should count number of unique tokens
     return(nothing)
 end
 
