@@ -100,6 +100,7 @@ function anova(samples::Array{Float64,1},stops::Array{Int64,1})
         error()
     end
     # Need to filter out NaN results and update accordingly
+    Np = length(samples) # TEST
     for i = 1:length(stops)
         if i == 1
             start = 1
@@ -120,6 +121,7 @@ function anova(samples::Array{Float64,1},stops::Array{Int64,1})
     end
     # Now can find N and p
     N = length(samples)
+    println(Np-N) #TEST
     p = length(stops)
     # make vector of n's
     n = zeros(Int64,length(stops))
@@ -141,7 +143,6 @@ function anova(samples::Array{Float64,1},stops::Array{Int64,1})
             x[i] = sum(samples[(stops[i-1]+1):stops[i]])/n[i]
         end
     end
-    println(x)
     # Now need to calculate S's => the standard deviations of the samples
     S = zeros(p)
     for i = 1:p
@@ -450,10 +451,11 @@ function analysis()
     woodrange = 50:94 # coal spoil (all) woodlands
     grassrange = 1:40 # coal spoil grasslands
     grass = [40,49]
-    println(anova(TotN[fgrassrange],[40,49])) # result fine
-    println(anova(loi[fgrassrange],[40,49])) # result fine
-    println(anova(erg[fgrassrange],[40,49])) # Wrong here, means correct but F is not
-    println(anova(bd[fgrassrange],[40,49])) # Wrong here, means correct but F is not
+    println(anova(TotN[fgrassrange],[40,49])) # result fine 1 deletion
+    println(anova(loi[fgrassrange],[40,49])) # result fine 0 deletions
+    println(anova(erg[fgrassrange],[40,49])) # Wrong here, means correct but F is not 2 deletions
+    println(anova(bd[fgrassrange],[40,49])) # Wrong here, means correct but F is not 2 deletions
+    println(anova(CNratio,[49,94])) # Again wrong here, means correct but F is not 2 deletions
     return(nothing)
 end
 
