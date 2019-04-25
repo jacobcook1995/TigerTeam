@@ -88,7 +88,89 @@ function standdev(data::Array{Float64,1},mean::Float64)
     return(sd)
 end
 
-function main()
+# make a function to do ANOVA analysis, should also get a P value here
+function anova(samples::Array{Float64,1},stops::Array{Int64,1})
+    # Need two stops for there to be anything to compare
+    if length(stops) <= 1
+        println("ERROR: Need at least 2 samples to compare")
+        error()
+    # The last stop should correspond to the end of the samples
+    elseif length(samples) != stops[end]
+        println("ERROR: Some of the data is not assigned to a group")
+        error()
+    end
+    # Need to filter out NaN results and update accordingly
+    for i = 1:length(stops)
+        if i == 1
+            start = 1
+        else
+            start = stops[i-1]+1
+        end
+        finish = stops[i]
+        # count NaNs in range start:finish
+        nans = isnan.(samples[start:finish])
+        count = sum(nans)
+        # Then filter out NaNs from section
+        temp = filter(y->!isnan(y),samples[start:finish])
+        samples = vcat(samples[1:start-1],temp,samples[finish+1:end])
+        # Then update counts to include removals
+        for j = i:length(stops)
+            stops[j] -= count
+        end
+    end
+    # Now can find N and p
+    N = length(samples)
+    p = length(stops)
+    # make vector of n's
+    n = zeros(Int64,length(stops))
+    for i = 1:length(n)
+        if i == 1
+            n[i] = stops[i]
+        else
+            n[i] = stops[i] - stops[i-1]
+        end
+    end
+    # now calculate X the mean across all samples
+    X = sum(samples)/N
+    # and then the vector x for means across all samples
+    x = zeros(p)
+    for i = 1:p
+        if i == 1
+            x[i] = sum(samples[1:stops[i]])/n[i]
+        else
+            x[i] = sum(samples[(stops[i-1]+1):stops[i]])/n[i]
+        end
+    end
+    println(x)
+    # Now need to calculate S's => the standard deviations of the samples
+    S = zeros(p)
+    for i = 1:p
+        if i == 1
+            S[i] = standdev(samples[1:stops[i]],x[i])
+        else
+            S[i] = standdev(samples[(stops[i-1]+1):stops[i]],x[i])
+        end
+    end
+    # Now calculate sum of squares due to treatment (SST)
+    SST = 0
+    for i = 1:p
+        SST += n[i]*(x[i] - X)^2
+    end
+    # Then calculate sum of squares due to errors (SSE)
+    SSE = 0
+    for i = 1:p
+        SSE += (n[i]-1)*S[i]^2
+    end
+    # Now finally have the infromation required to obtain the F statistic
+    MSE = SSE/(N-p)
+    MST = SST/(p-1)
+    F = MST/MSE
+    # Set P value as zero for now, eventually should obtain it from F statistic
+    P = 0
+    return(F,P)
+end
+
+function plots()
     # Check there is a file of productions to be read
     infile = "../Input/soildata.csv"
     if ~isfile(infile)
@@ -308,4 +390,72 @@ function main()
     return(nothing)
 end
 
-@time main()
+# function to do analysis
+function analysis()
+    # Check there is a file of productions to be read
+    infile = "../Input/soildata.csv"
+    if ~isfile(infile)
+        println("Error: No file of soil data to be read.")
+        return(nothing)
+    end
+    # now read in 'Entropy productions'
+    l = countlines(infile)
+    w = 11
+    soildata = Array{String,2}(undef,l,w)
+    open(infile, "r") do in_file
+        # Use a for loop to process the rows in the input file one-by-one
+        k = 1
+        for line in eachline(in_file)
+            # parse line by finding commas
+            L = length(line)
+            comma = fill(0,w+1)
+            j = 1
+            for i = 1:L
+                if line[i] == ','
+                    j += 1
+                    comma[j] = i
+                end
+            end
+            comma[end] = L+1
+            for i = 1:w
+                soildata[k,i] = line[(comma[i]+1):(comma[i+1]-1)]
+            end
+            k += 1
+        end
+    end
+    # Now a step to remove percentage signs using chop
+    for i = 1:l
+        # Chop everything but the NaNs
+        if soildata[i,5] != "NaN"
+            soildata[i,5] = chop(soildata[i,5])
+        end
+        if soildata[i,9] != "NaN"
+            soildata[i,9] = chop(soildata[i,9])
+        end
+    end
+    # Now have all the data in a string object
+    idents = soildata[2:end,1] # seperate out identifying tags
+    alt = parse.(Float64,soildata[2:end,2]) # Altitude in meters
+    bd = parse.(Float64,soildata[2:end,3]) # Bulk density in g/cm^3
+    erg = parse.(Float64,soildata[2:end,4]) # Ergostel (μg/g DW)
+    loi = parse.(Float64,soildata[2:end,5]) # Loss on ignition percentage
+    pH = parse.(Float64,soildata[2:end,6]) # pH
+    TotN = parse.(Float64,soildata[2:end,7]) # percentage nitrogen
+    TotC = parse.(Float64,soildata[2:end,8]) # percentage carbon total
+    OrgC = parse.(Float64,soildata[2:end,9]) # percentage carbon Organic matter
+    OrgNratio = parse.(Float64,soildata[2:end,10]) # Organic material to nitrogen ratio
+    CNratio = parse.(Float64,soildata[2:end,11]) # Carbon nitrogen ratio
+    # should find data ranges for grasslands/woodlands/grassslands-brigant
+    fgrassrange = 1:49 # all grasslands
+    woodrange = 50:94 # coal spoil (all) woodlands
+    grassrange = 1:40 # coal spoil grasslands
+    grass = [40,49]
+    println(anova(TotN[fgrassrange],[40,49])) # result fine
+    println(anova(loi[fgrassrange],[40,49])) # result fine
+    println(anova(erg[fgrassrange],[40,49])) # Wrong here, means correct but F is not
+    println(anova(bd[fgrassrange],[40,49])) # Wrong here, means correct but F is not
+    return(nothing)
+end
+
+# @time plots()
+@time analysis()
